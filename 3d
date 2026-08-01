@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Books & Mugs Scene</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at top, #242424 0%, #101010 55%, #070707 100%);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #ui {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      z-index: 10;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.38);
+      border: 1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 14px 16px;
+      box-shadow: 0 10px 35px rgba(0,0,0,.35);
+      user-select: none;
+      max-width: 270px;
+    }
+
+    #ui h1 {
+      font-size: 18px;
+      margin: 0 0 8px;
+      font-weight: 700;
+    }
+
+    #ui p {
+      margin: 6px 0;
+      font-size: 13px;
+      opacity: 0.9;
+      line-height: 1.4;
+    }
+
+    #loading {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: rgba(8, 8, 8, 0.96);
+      transition: opacity .35s ease;
+    }
+
+    #loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loader-box {
+      text-align: center;
+      padding: 22px 26px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 12px 50px rgba(0,0,0,.45);
+      min-width: 280px;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 14px;
+      border-radius: 50%;
+      border: 4px solid rgba(255,255,255,0.12);
+      border-top-color: #fff;
+      animation: spin 1s linear infinite;
+    }
+
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      opacity: 0.75;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #error {
+      position: fixed;
+      left: 16px;
+      right: 16px;
+      bottom: 16px;
+      z-index: 30;
+      display: none;
+      color: #fff;
+      background: rgba(120, 20, 20, 0.88);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 12px 14px;
+      white-space: pre-wrap;
+      box-shadow: 0 10px 35px rgba(0,0,0,.35);
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="loader-box">
+      <div class="spinner"></div>
+      <div style="font-size:18px;font-weight:700;">Загрузка 3D-сцены…</div>
+      <div class="hint">Проверь, что <b>books_and_mugs.obj</b> и папка <b>textures</b> лежат рядом с этим HTML.</div>
+    </div>
+  </div>
+
+  <div id="ui">
+    <h1>Books & Mugs 3D</h1>
+    <p>ЛКМ — вращение</p>
+    <p>Колесо — приближение</p>
+    <p>ПКМ / Shift — перемещение</p>
+  </div>
+
+  <div id="error"></div>
+  <canvas id="c"></canvas>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.166.1/build/three.module.js",
+      "three/addons/controls/OrbitControls.js": "https://unpkg.com/three@0.166.1/examples/jsm/controls/OrbitControls.js",
+      "three/addons/loaders/OBJLoader.js": "https://unpkg.com/three@0.166.1/examples/jsm/loaders/OBJLoader.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+
+    const canvas = document.getElementById('c');
+    const loading = document.getElementById('loading');
+    const errorBox = document.getElementById('error');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f0f10);
+    scene.fog = new THREE.Fog(0x0f0f10, 18, 42);
+
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      200
+    );
+    camera.position.set(8.5, 6.5, 10.5);
+
+    const renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false
+    });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.target.set(0, 1.2, 0);
+    controls.minDistance = 3.5;
+    controls.maxDistance = 30;
+    controls.maxPolarAngle = Math.PI * 0.48;
+    controls.enablePan = true;
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x2a1d12, 1.5);
+    scene.add(hemi);
+
+    const dir = new THREE.DirectionalLight(0xffffff, 2.2);
+    dir.position.set(6, 12, 8);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.camera.near = 0.5;
+    dir.shadow.camera.far = 40;
+    dir.shadow.camera.left = -15;
+    dir.shadow.camera.right = 15;
+    dir.shadow.camera.top = 15;
+    dir.shadow.camera.bottom = -15;
+    scene.add(dir);
+
+    const fill = new THREE.PointLight(0xffd7b3, 1.4, 60, 2);
+    fill.position.set(-8, 4, -6);
+    scene.add(fill);
+
+    const rim = new THREE.SpotLight(0xffffff, 1.8, 80, Math.PI * 0.32, 0.45, 1);
+    rim.position.set(-7, 10, 12);
+    rim.castShadow = true;
+    rim.shadow.mapSize.set(1024, 1024);
+    scene.add(rim);
+
+    function makeWoodTexture() {
+      const size = 1024;
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const ctx = c.getContext('2d');
+
+      const grad = ctx.createLinearGradient(0, 0, size, size);
+      grad.addColorStop(0, '#6e4a2d');
+      grad.addColorStop(0.5, '#8a603c');
+      grad.addColorStop(1, '#5a3a22');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, size, size);
+
+      for (let i = 0; i < 120; i++) {
+        const y = (i / 120) * size + Math.sin(i * 0.65) * 7;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(size, y + Math.sin(i * 0.12) * 3);
+        ctx.strokeStyle = `rgba(40,20,8,${0.03 + (i % 7) * 0.01})`;
+        ctx.lineWidth = 2 + (i % 4) * 0.6;
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < 2600; i++) {
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const s = Math.random() * 2.2;
+        const a = Math.random() * 0.06;
+        ctx.fillStyle = `rgba(20,10,5,${a})`;
+        ctx.fillRect(x, y, s, s);
+      }
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(3.5, 3.5);
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      return tex;
+    }
+
+    const tableTex = makeWoodTexture();
+
+    const table = new THREE.Mesh(
+      new THREE.BoxGeometry(30, 1, 18),
+      new THREE.MeshStandardMaterial({
+        map: tableTex,
+        roughness: 0.88,
+        metalness: 0.02
+      })
+    );
+    table.position.y = -0.5;
+    table.receiveShadow = true;
+    scene.add(table);
+
+    const tableTop = new THREE.Mesh(
+      new THREE.BoxGeometry(30.2, 0.14, 18.2),
+      new THREE.MeshStandardMaterial({
+        map: tableTex,
+        roughness: 0.9,
+        metalness: 0.02
+      })
+    );
+    tableTop.position.y = 0.05;
+    tableTop.receiveShadow = true;
+    scene.add(tableTop);
+
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(80, 80),
+      new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 1, metalness: 0 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.01;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    const loader = new OBJLoader();
+    let modelRoot = null;
+
+    function makeMaterial(name, index) {
+      const palette = [
+        0xb2a28b, 0x73513d, 0xe7d7be, 0xd2c7ba, 0x8f694b, 0x5c4a44
+      ];
+      const color = new THREE.Color(palette[index % palette.length]);
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.78,
+        metalness: 0.02
+      });
+
+      const textureFiles = [
+        'textures/1.jpg',
+        'textures/2.jpg',
+        'textures/3.jpg',
+        'textures/4.jpg',
+        'textures/5.jpg',
+        'textures/diffuse patch.jpg',
+        'textures/diffuse patch 2.jpg',
+        'textures/papers.jpg'
+      ];
+
+      const chosen = textureFiles[index % textureFiles.length];
+      const texLoader = new THREE.TextureLoader();
+      texLoader.load(
+        chosen,
+        (tx) => {
+          tx.colorSpace = THREE.SRGBColorSpace;
+          tx.wrapS = tx.wrapT = THREE.RepeatWrapping;
+          tx.repeat.set(1, 1);
+          tx.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          mat.map = tx;
+          mat.needsUpdate = true;
+        },
+        undefined,
+        () => {}
+      );
+
+      return mat;
+    }
+
+    function showError(message) {
+      errorBox.style.display = 'block';
+      errorBox.textContent = message;
+    }
+
+    function fitModelToScene(root) {
+      const box = new THREE.Box3().setFromObject(root);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+
+      root.position.x += root.position.x - center.x;
+      root.position.y += root.position.y - center.y;
+      root.position.z += root.position.z - center.z;
+
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const targetSize = 6.2;
+      const scale = targetSize / maxDim;
+      root.scale.setScalar(scale);
+
+      const scaledBox = new THREE.Box3().setFromObject(root);
+      const minY = scaledBox.min.y;
+      root.position.y -= minY - 0.05;
+      root.position.y += 0.25;
+
+      const centered = new THREE.Box3().setFromObject(root);
+      const c = centered.getCenter(new THREE.Vector3());
+      root.position.x -= c.x * 0.02;
+      root.position.z -= c.z * 0.02;
+
+      controls.target.set(0, 1.15, 0);
+      controls.update();
+    }
+
+    loader.load(
+      'books_and_mugs.obj',
+      (obj) => {
+        modelRoot = new THREE.Group();
+        modelRoot.add(obj);
+
+        let i = 0;
+
+        obj.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            child.material = makeMaterial(child.name || 'part', i);
+            child.material.side = THREE.DoubleSide;
+            i++;
+          }
+        });
+
+        fitModelToScene(modelRoot);
+        scene.add(modelRoot);
+
+        const shadowBlob = new THREE.Mesh(
+          new THREE.CircleGeometry(2.8, 64),
+          new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.32 })
+        );
+        shadowBlob.rotation.x = -Math.PI / 2;
+        shadowBlob.position.y = 0.02;
+        shadowBlob.scale.set(1.35, 1.0, 1.0);
+        scene.add(shadowBlob);
+
+        loading.classList.add('hidden');
+      },
+      (progress) => {
+        if (progress.total) {
+          const percent = Math.round((progress.loaded / progress.total) * 100);
+          loading.querySelector('.loader-box .hint').textContent = `Загружено ${percent}%`;
+        }
+      },
+      (err) => {
+        console.error(err);
+        showError(
+          'Не удалось загрузить books_and_mugs.obj.\n' +
+          'Проверь, что HTML открыт через локальный сервер и файл лежит рядом с OBJ.\n\n' +
+          String(err?.message || err)
+        );
+        loading.querySelector('.loader-box .hint').textContent = 'Ошибка загрузки';
+      }
+    );
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (modelRoot) {
+        modelRoot.rotation.y += 0.0035;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    });
+  </script>
+</body>
+</html>
